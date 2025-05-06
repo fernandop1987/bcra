@@ -1,0 +1,4 @@
+/* Fondo con color sólido */
+[data-testid="stAppViewContainer"] {
+    background-color: #1E90FF;
+}

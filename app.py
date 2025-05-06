@@ -15,26 +15,54 @@ from plotting import (
 # Configurar la página
 st.set_page_config(page_title="Monitor Financiero", layout="wide")
 
-# Sidebar - Selección de Fechas
-st.sidebar.title("Configuración de Fechas")
-today = datetime.date.today()
 
-start_date = st.sidebar.date_input(
-    "Fecha de inicio",
-    value=datetime.date(2024, 8, 1),
-    min_value=datetime.date(2020, 1, 1),
-    max_value=today
-)
+st.markdown("""
+<style>
+/* Fondo general */
+.stApp {
+    background-color: #1E90FF;
+}
 
-end_date = st.sidebar.date_input(
-    "Fecha de fin",
-    value=today,
-    min_value=start_date,
-    max_value=today
-)
+/* Cambiar fondo del encabezado */
+[data-testid="stHeader"] {
+    background-color: #1E90FF;
+}
 
-# Título principal
-st.title("Monitor Financiero de la Economía Argentina")
+/* Quitar sombra */
+[data-testid="stHeader"] div {
+    box-shadow: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# Función para aplicar estilos CSS
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+# Aplicar el CSS
+local_css("styles.css")
+
+# --- Título ---
+col_titulo, col_fecha1, col_fecha2 = st.columns([2.5, 1.2, 1.2])
+
+with col_titulo:
+    st.markdown("""
+    <h1 style='color:white; text-transform: uppercase; margin-bottom: 0;'>
+    MONITOR FINANCIERO
+    </h1>
+    <h5 style='color:white; font-weight: normal; margin-top: -20px;'>
+    indicadores monetarios, cambiarios y bursátiles
+    </h5>
+    """, unsafe_allow_html=True)
+
+with col_fecha1:
+    start_date = st.date_input("Desde", value=datetime.date(2024, 8, 1), min_value=datetime.date(2023, 1, 1), max_value=datetime.date.today(), key="start")
+
+with col_fecha2:
+    end_date = st.date_input("Hasta", value=datetime.date.today(), min_value=start_date, max_value=datetime.date.today(), key="end")
+
 
 # --- Cargar Datos ---
 with st.spinner('Descargando datos...'):
@@ -62,13 +90,7 @@ with col3:
     st.plotly_chart(plot_merval(df_merval), use_container_width=True)
     st.plotly_chart(plot_cedears(df_cedears), use_container_width=True)
 
-    st.markdown("""
-    ### Comentarios y Análisis
-    - Evolución de la inflación: ...
-    - Comportamiento de las reservas: ...
-    - Dinámica cambiaria oficial y paralela: ...
-    - Evolución del mercado accionario argentino: ...
-    """)
 
 # Footer
-st.caption(f"Actualizado el {today.strftime('%d/%m/%Y')}")
+st.caption(f"Actualizado el {datetime.date.today().strftime('%d/%m/%Y')}")
+

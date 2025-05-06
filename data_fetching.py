@@ -34,41 +34,34 @@ def get_bcra_variable(id_variable, start_date, end_date):
         st.error(f"Error al conectar con la API del BCRA: {e}")
         return pd.DataFrame()
 
-def get_usd_oficial(start_date, end_date):
-    # Convertir a datetime si es string
-    today = datetime.today().date()
-    end_date_dt = pd.to_datetime(end_date).date()
-
-    # Limitar la fecha máxima al día anterior si es mayor a hoy
-    if end_date_dt >= today:
-        end_date = (today - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-
+def get_usd_oficial(fecha_inicio, fecha_fin):
     url = "https://api.bcra.gob.ar/estadisticascambiarias/v1.0/Cotizaciones/USD"
-    params = {"fechadesde": start_date, "fechahasta": end_date, "limit": 1000}
+    params = {"fechadesde": fecha_inicio, "fechahasta": fecha_fin, "limit": 1000}
     r = requests.get(url, params=params, verify=False)
-    
-    if r.status_code == 200:
-        data = r.json()["results"]
-        registros = []
-        for d in data:
-            fecha = d["fecha"]
-            for cot in d["detalle"]:
-                registros.append({"fecha": fecha, "usd_oficial": cot["tipoCotizacion"]})
-        df = pd.DataFrame(registros)
-        df["fecha"] = pd.to_datetime(df["fecha"])
-        return df.groupby("fecha").mean().reset_index()
-    else:
-        raise Exception("Error al obtener USD Oficial")
+    data = r.json()["results"]
+    registros = []
+    for d in data:
+        fecha = d["fecha"]
+        for cot in d["detalle"]:
+            registros.append({"fecha": fecha, "usd_oficial": cot["tipoCotizacion"]})
+
+    df = pd.DataFrame(registros)
+    df["fecha"] = pd.to_datetime(df["fecha"])
+    df = df.groupby("fecha").mean(numeric_only=True).reset_index()
+    df = df.dropna(subset=["fecha", "usd_oficial"]).drop_duplicates(subset=["fecha"])
+    return df
 
 def get_usd_blue():
     url = "https://api.bluelytics.com.ar/v2/evolution.json"
     r = requests.get(url)
     if r.status_code == 200:
         data = r.json()
-        df = pd.DataFrame(data)
-        df['fecha'] = pd.to_datetime(df['date'])
-        df['usd_blue'] = (df['value_avg'])
-        return df[['fecha', 'usd_blue']]
+        blue_data = [entry for entry in data if entry["source"] == "Blue"]
+        df = pd.DataFrame(blue_data)
+        df["fecha"] = pd.to_datetime(df["date"])
+        df["usd_blue"] = (df["value_buy"] + df["value_sell"]) / 2
+        df = df.dropna(subset=["fecha", "usd_blue"]).drop_duplicates(subset=["fecha"])
+        return df[["fecha", "usd_blue"]]
     else:
         raise Exception("Error al obtener USD Blue")
 
@@ -112,19 +105,34 @@ def get_cny(start_date, end_date):
     return df_cny
 
 def get_merval(start_date, end_date):
-    merval = yf.download("^MERV", start=start_date, end=end_date)["Close"].reset_index()
-    merval = merval.rename(columns={"Date": "fecha", "Close": "merval_ars"})
+    merval = yf.download("^MERV", start=start_date, end=end_date)
+    merval_close = merval.xs("Close", axis=1, level="Price")
+    merval = merval_close.rename(columns={"^MERV": "merval_ars"}).reset_index()
+    merval = merval.rename(columns={"Date": "fecha"})
+
     df_usd_blue = get_usd_blue()
-    df_usd_blue = df_usd_blue[df_usd_blue['fecha'].between(start_date, end_date)]
-    df = pd.merge(merval, df_usd_blue, on='fecha', how='inner')
-    df['merval_usd'] = df['merval_ars'] / df['usd_blue']
+    df_usd_blue = df_usd_blue[df_usd_blue["fecha"].between(start_date, end_date)]
+
+    df = pd.merge(merval, df_usd_blue, on="fecha", how="inner")
+    df["merval_usd"] = df["merval_ars"] / df["usd_blue"]
+    df = df.sort_values("fecha").reset_index(drop=True)
     return df
 
+
+
+
 def get_cedears(start_date, end_date):
-    tickers = ["YPFD.BA", "GGAL.BA", "BMA.BA", "MELI.BA"]
-    data = yf.download(tickers, start=start_date, end=end_date)["Close"]
-    df = data.reset_index().rename(columns={"Date": "fecha"})
-    for ticker in tickers:
-        df[ticker] = (df[ticker] / df[ticker].iloc[0]) * 100
-    df = df.dropna().sort_values("fecha").reset_index(drop=True)
-    return df
+    cedears = {
+    "YPFD.BA": "YPF",
+    "GGAL.BA": "Galicia",
+    "BMA.BA": "Banco Macro",
+    "MELI.BA": "MercadoLibre"
+}
+    data = yf.download(list(cedears.keys()), start=start_date, end=end_date)["Close"]
+    df_cedears = data.reset_index()
+    df_cedears = df_cedears.rename(columns={"Date": "fecha"})
+    for ticker in cedears.keys():
+        if ticker in df_cedears.columns and not df_cedears[ticker].dropna().empty:
+            df_cedears[ticker] = (df_cedears[ticker] / df_cedears[ticker].iloc[0]) * 100
+    df_cedears = df_cedears.dropna(how="all", subset=list(cedears.keys())).sort_values("fecha").reset_index(drop=True)
+    return df_cedears
