@@ -11,22 +11,6 @@ import datetime
 def get_bcra_variable(id_variable, start_date, end_date):
 
     
-    # Asegurar que las fechas estén en formato string 'YYYY-MM-DD'
-    if isinstance(start_date, datetime):
-        start_date = start_date.strftime("%Y-%m-%d")
-    if isinstance(end_date, datetime):
-        end_date = end_date.strftime("%Y-%m-%d")
-
-    # Validación del formato
-    try:
-        datetime.strptime(start_date, "%Y-%m-%d")
-        datetime.strptime(end_date, "%Y-%m-%d")
-    except ValueError:
-        st.error("Las fechas deben tener el formato 'YYYY-MM-DD'.")
-        return pd.DataFrame()
-
-
-    
     url = f"https://api.bcra.gob.ar/estadisticas/v3.0/monetarias/{id_variable}?desde={start_date}&hasta={end_date}"
     try:
         response = requests.get(url, verify=False, timeout=10)
