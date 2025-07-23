@@ -58,7 +58,7 @@ with col_titulo:
     """, unsafe_allow_html=True)
 
 with col_fecha1:
-    start_date = st.date_input("Desde", value=datetime.date(2024, 8, 1), min_value=datetime.date(2023, 1, 1), max_value=datetime.date.today(), key="start")
+    start_date = st.date_input("Desde", value=datetime.date(2024,08,01), min_value=datetime.date(2023, 1, 1), max_value=datetime.date.today(), key="start")
 
 with col_fecha2:
     end_date = st.date_input("Hasta", value=datetime.date.today(), min_value=start_date, max_value=datetime.date.today(), key="end")
