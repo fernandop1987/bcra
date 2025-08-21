@@ -92,5 +92,6 @@ with col3:
 
 
 # Footer
+st.caption(f"Fuente de datos: Banco Central de la República Argentina (BCRA)")
 st.caption(f"Actualizado el {datetime.date.today().strftime('%d/%m/%Y')}")
 
