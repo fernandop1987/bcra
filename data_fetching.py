@@ -5,6 +5,58 @@ import pandas as pd
 import yfinance as yf
 import streamlit as st
 import datetime
+from functools import lru_cache
+import re
+
+BCRA_MONETARIAS_BASE = "https://api.bcra.gob.ar/estadisticas/v3.0/monetarias"
+
+@lru_cache(maxsize=1)
+def _listar_variables_monetarias() -> pd.DataFrame:
+    """Trae el catálogo actual de variables monetarias (v3.0)."""
+    r = requests.get(BCRA_MONETARIAS_BASE, timeout=15, verify=False)
+    r.raise_for_status()
+    data = r.json().get("results", [])
+    df = pd.DataFrame(data)
+    # Normalizo texto para búsquedas robustas
+    if not df.empty and "descripcion" in df.columns:
+        df["desc_norm"] = (
+            df["descripcion"]
+            .astype(str)
+            .str.normalize("NFKD")
+            .str.encode("ascii", errors="ignore")
+            .str.decode("utf-8")
+            .str.lower()
+        )
+    return df
+
+def _id_por_descripcion(patrones: list[str]) -> int | None:
+    """Devuelve el idVariable cuyo 'descripcion' matchee cualquiera de los patrones (regex/contains)."""
+    dfv = _listar_variables_monetarias()
+    if dfv.empty:
+        return None
+    candidates = pd.Series(False, index=dfv.index)
+    for p in patrones:
+        # contiene o regex sencillo
+        try:
+            candidates |= dfv["desc_norm"].str.contains(p, regex=True)
+        except re.error:
+            candidates |= dfv["desc_norm"].str.contains(re.escape(p))
+    sub = dfv[candidates]
+    if sub.empty:
+        return None
+    # Si hay varios, elegir el más “obvio”: el de descripción más corta
+    sub = sub.assign(len_desc=sub["descripcion"].str.len()).sort_values("len_desc")
+    return int(sub.iloc[0]["idVariable"])
+
+def _debug_aviso(st_label: str, id_var: int):
+    dfv = _listar_variables_monetarias()
+    if not dfv.empty:
+        row = dfv[dfv["idVariable"] == id_var]
+        if not row.empty:
+            st.info(f"{st_label}: usando idVariable={id_var} → {row.iloc[0]['descripcion']}")
+
+
+
 
 # --- Funciones para obtención de datos ---
 
@@ -140,14 +192,48 @@ def get_cny_oficial(start_date, end_date):
     else:
         raise Exception("Error al obtener CNY Oficial")
 
+
+# --- Modifico los get de BCRA ---
+
+
 def get_inflacion(start_date, end_date):
     return get_bcra_variable(27, start_date, end_date)
 
+#def get_tasa_monetaria(start_date, end_date):
+    #return get_bcra_variable(6, start_date, end_date)
+
+#def get_reservas(start_date, end_date):
+    #return get_bcra_variable(1, start_date, end_date)
+
+
 def get_tasa_monetaria(start_date, end_date):
-    return get_bcra_variable(6, start_date, end_date)
+    patrones = [
+        r"tasa.*pol[ií]tica monetaria",
+        r"\btpm\b",
+        r"tasa.*referencia",
+    ]
+    idv = _id_por_descripcion(patrones)
+    if idv is None:
+        st.error("No encontré la serie de Tasa de Política Monetaria en el catálogo del BCRA (v3.0).")
+        return pd.DataFrame()
+    _debug_aviso("Tasa monetaria", idv)
+    return get_bcra_variable(idv, start_date, end_date)
 
 def get_reservas(start_date, end_date):
-    return get_bcra_variable(1, start_date, end_date)
+    patrones = [
+        r"reservas internacionales",
+        r"\breservas\b.*(bcra|internacionales)",
+    ]
+    idv = _id_por_descripcion(patrones)
+    if idv is None:
+        st.error("No encontré la serie de Reservas en el catálogo del BCRA (v3.0).")
+        return pd.DataFrame()
+    _debug_aviso("Reservas", idv)
+    return get_bcra_variable(idv, start_date, end_date)
+
+
+
+# ---  ---
 
 def get_tipo_cambio(start_date, end_date):
     df_usd_oficial = get_usd_oficial(start_date, end_date)
