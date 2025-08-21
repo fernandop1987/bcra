@@ -9,32 +9,88 @@ import datetime
 # --- Funciones para obtención de datos ---
 
 def get_bcra_variable(id_variable, start_date, end_date):
+    import requests, pandas as pd
+    from datetime import datetime
 
-    
-    url = f"https://api.bcra.gob.ar/estadisticas/v3.0/monetarias/{id_variable}?desde={start_date}&hasta={end_date}"
+    def _norm(d: str) -> str:
+        # acepta 'YYYY-MM-DD' o datetime/date y normaliza a 'YYYY-MM-DD'
+        if hasattr(d, "strftime"):
+            return d.strftime("%Y-%m-%d")
+        d = str(d).strip()
+        # corta si venía con 'YYYY-MM-DDTHH...' u otros
+        return d[:10]
+
+    desde = _norm(start_date)
+    hasta = _norm(end_date)
+
+    # validación rápida de formato y orden (requisito v3.0)
     try:
-        response = requests.get(url, verify=False, timeout=10)
-        if response.status_code == 200:
-            data = response.json().get('results', [])
-            if not data:
-                st.warning(f"No se encontraron datos para la variable {id_variable} entre {start_date} y {end_date}.")
+        d_desde = datetime.strptime(desde, "%Y-%m-%d")
+        d_hasta = datetime.strptime(hasta, "%Y-%m-%d")
+    except ValueError:
+        st.error(f"Fechas inválidas (usa YYYY-MM-DD). Recibí desde='{desde}', hasta='{hasta}'.")
+        return pd.DataFrame()
+    if d_desde > d_hasta:
+        st.warning("Intercambié las fechas porque 'desde' > 'hasta'.")
+        desde, hasta = hasta, desde
+
+    base = "https://api.bcra.gob.ar/estadisticas/v3.0/monetarias"
+    url = f"{base}/{id_variable}"
+    params = {"desde": desde, "hasta": hasta, "limit": 3000, "offset": 0}
+
+    rows = []
+    try:
+        while True:
+            r = requests.get(url, params=params, verify=False, timeout=15)
+            # Si el servidor responde 400/404/500, intento extraer el mensaje de error de la API
+            if r.status_code != 200:
+                try:
+                    payload = r.json()
+                    msgs = payload.get("errorMessages") or []
+                    msg = "; ".join(msgs) if msgs else r.text
+                except Exception:
+                    msg = r.text
+                if r.status_code == 400:
+                    st.error(f"Error 400 BCRA: {msg}")
+                elif r.status_code == 404:
+                    st.error(f"Error 404 BCRA (idVariable={id_variable}): {msg}")
+                else:
+                    st.error(f"Error {r.status_code} BCRA: {msg}")
                 return pd.DataFrame()
-            df = pd.DataFrame(data)
-            df["fecha"] = pd.to_datetime(df["fecha"])
-            df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
+
+            data = r.json()
+            chunk = data.get("results", [])
+            if not isinstance(chunk, list):
+                chunk = []
+            rows.extend(chunk)
+
+            # cortar si no hay más páginas
+            got = len(chunk)
+            lim = params["limit"]
+            meta = (data.get("metadata") or {}).get("resultset") or {}
+            total = meta.get("count", None)
+            if got < lim or (total is not None and params["offset"] + got >= total):
+                break
+            params["offset"] += lim
+
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.warning(f"No se encontraron datos para la variable {id_variable} entre {desde} y {hasta}.")
             return df
-        elif response.status_code == 400:
-            st.error(f"Error 400: Fechas mal formateadas en la consulta al BCRA.")
-            return pd.DataFrame()
-        elif response.status_code == 404:
-            st.error(f"Error 404: Variable ID {id_variable} no encontrada en el BCRA.")
-            return pd.DataFrame()
-        else:
-            st.error(f"Error {response.status_code}: Problema en la API del BCRA. Intente nuevamente más tarde.")
-            return pd.DataFrame()
+
+        if "fecha" in df.columns:
+            df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+        if "valor" in df.columns:
+            df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
+        return df
+
     except Exception as e:
         st.error(f"Error al conectar con la API del BCRA: {e}")
         return pd.DataFrame()
+
+
+
+
 
 def get_usd_oficial(fecha_inicio, fecha_fin):
     url = "https://api.bcra.gob.ar/estadisticascambiarias/v1.0/Cotizaciones/USD"
