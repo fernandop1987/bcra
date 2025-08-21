@@ -202,8 +202,8 @@ def get_inflacion(start_date, end_date):
 #def get_tasa_monetaria(start_date, end_date):
     #return get_bcra_variable(6, start_date, end_date)
 
-#def get_reservas(start_date, end_date):
-    #return get_bcra_variable(1, start_date, end_date)
+def get_reservas(start_date, end_date):
+    return get_bcra_variable(1, start_date, end_date)
 
 
 def get_tasa_monetaria(start_date, end_date):
@@ -219,17 +219,17 @@ def get_tasa_monetaria(start_date, end_date):
     _debug_aviso("Tasa monetaria", idv)
     return get_bcra_variable(idv, start_date, end_date)
 
-def get_reservas(start_date, end_date):
-    patrones = [
-        r"reservas internacionales",
-        r"\breservas\b.*(bcra|internacionales)",
-    ]
-    idv = _id_por_descripcion(patrones)
-    if idv is None:
-        st.error("No encontré la serie de Reservas en el catálogo del BCRA (v3.0).")
-        return pd.DataFrame()
-    _debug_aviso("Reservas", idv)
-    return get_bcra_variable(idv, start_date, end_date)
+#def get_reservas(start_date, end_date):
+    #patrones = [
+        #r"reservas internacionales",
+        #r"\breservas\b.*(bcra|internacionales)",
+    #]
+    #idv = _id_por_descripcion(patrones)
+    #if idv is None:
+        #st.error("No encontré la serie de Reservas en el catálogo del BCRA (v3.0).")
+        #return pd.DataFrame()
+    #_debug_aviso("Reservas", idv)
+    #return get_bcra_variable(idv, start_date, end_date)
 
 
 
