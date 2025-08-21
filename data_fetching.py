@@ -10,7 +10,7 @@ import re
 
 BCRA_MONETARIAS_BASE = "https://api.bcra.gob.ar/estadisticas/v3.0/monetarias"
 
-@lru_cache(maxsize=1)
+'''@lru_cache(maxsize=1)
 def _listar_variables_monetarias() -> pd.DataFrame:
     """Trae el catálogo actual de variables monetarias (v3.0)."""
     r = requests.get(BCRA_MONETARIAS_BASE, timeout=15, verify=False)
@@ -53,7 +53,7 @@ def _debug_aviso(st_label: str, id_var: int):
     if not dfv.empty:
         row = dfv[dfv["idVariable"] == id_var]
         if not row.empty:
-            st.info(f"{st_label}: usando idVariable={id_var} → {row.iloc[0]['descripcion']}")
+            st.info(f"{st_label}: usando idVariable={id_var} → {row.iloc[0]['descripcion']}")'''
 
 
 
@@ -199,25 +199,25 @@ def get_cny_oficial(start_date, end_date):
 def get_inflacion(start_date, end_date):
     return get_bcra_variable(27, start_date, end_date)
 
-#def get_tasa_monetaria(start_date, end_date):
-    #return get_bcra_variable(6, start_date, end_date)
+def get_tasa_monetaria(start_date, end_date):
+    return get_bcra_variable(160, start_date, end_date)
 
 def get_reservas(start_date, end_date):
     return get_bcra_variable(1, start_date, end_date)
 
 
-def get_tasa_monetaria(start_date, end_date):
-    patrones = [
-        r"tasa.*pol[ií]tica monetaria",
-        r"\btpm\b",
-        r"tasa.*referencia",
-    ]
-    idv = _id_por_descripcion(patrones)
-    if idv is None:
-        st.error("No encontré la serie de Tasa de Política Monetaria en el catálogo del BCRA (v3.0).")
-        return pd.DataFrame()
-    _debug_aviso("Tasa monetaria", idv)
-    return get_bcra_variable(idv, start_date, end_date)
+#def get_tasa_monetaria(start_date, end_date):
+    #patrones = [
+        #r"tasa.*pol[ií]tica monetaria",
+        #r"\btpm\b",
+        #r"tasa.*referencia",
+    #]
+    #idv = _id_por_descripcion(patrones)
+    #if idv is None:
+        #st.error("No encontré la serie de Tasa de Política Monetaria en el catálogo del BCRA (v3.0).")
+        #return pd.DataFrame()
+    #_debug_aviso("Tasa monetaria", idv)
+    #return get_bcra_variable(idv, start_date, end_date)
 
 #def get_reservas(start_date, end_date):
     #patrones = [
